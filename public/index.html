@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>多人贪吃蛇</title>
+    <style>
+        .game-info {
+            margin-bottom: 20px;
+            text-align: center;
+            color: #333;
+        }
+        .flash {
+            animation: flash 0.5s;
+        }
+        @keyframes flash {
+            0% { background-color: white; }
+            50% { background-color: #ff4444; }
+            100% { background-color: white; }
+        }
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+        }
+        #gameCanvas {
+            border: 2px solid #333;
+            background-color: white;
+        }
+        #score {
+            margin-top: 20px;
+            font-size: 24px;
+        }
+        #controls {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            border: none;
+            border-radius: 50%;
+            background-color: #4CAF50;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+        .control-btn:active {
+            background-color: #45a049;
+        }
+        @media (min-width: 768px) {
+            .control-btn {
+                display: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="game-info">
+        <h2>游戏说明</h2>
+        <p>使用方向键或屏幕按钮控制蛇的移动</p>
+        <p>吃到食物可以得分和变长</p>
+        <p>碰撞到其他玩家或自己会受到惩罚：</p>
+        <p>- 扣除20分</p>
+        <p>- 缩短长度</p>
+        <p>- 随机改变方向</p>
+    </div>
+    <canvas id="gameCanvas" width="400" height="400"></canvas>
+    <div id="score">分数: 0</div>
+    <div id="controls">
+        <button class="control-btn" id="upBtn">↑</button>
+        <button class="control-btn" id="leftBtn">←</button>
+        <button class="control-btn" id="rightBtn">→</button>
+        <button class="control-btn" id="downBtn">↓</button>
+    </div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script>
+        const socket = io();
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const scoreElement = document.getElementById('score');
+        let myId = null;
+
+        // 控制按钮事件
+        document.getElementById('upBtn').addEventListener('click', () => changeDirection('up'));
+        document.getElementById('downBtn').addEventListener('click', () => changeDirection('down'));
+        document.getElementById('leftBtn').addEventListener('click', () => changeDirection('left'));
+        document.getElementById('rightBtn').addEventListener('click', () => changeDirection('right'));
+
+        // 键盘控制
+        document.addEventListener('keydown', (e) => {
+            switch(e.key) {
+                case 'ArrowUp':
+                    changeDirection('up');
+                    break;
+                case 'ArrowDown':
+                    changeDirection('down');
+                    break;
+                case 'ArrowLeft':
+                    changeDirection('left');
+                    break;
+                case 'ArrowRight':
+                    changeDirection('right');
+                    break;
+            }
+        });
+
+        function changeDirection(direction) {
+            socket.emit('direction', direction);
+        }
+
+        // 加入游戏
+        socket.on('connect', () => {
+            myId = socket.id;
+            socket.emit('join');
+        });
+
+        let lastScore = 0;
+
+        // 渲染游戏
+        socket.on('gameState', ({ players, foods }) => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // 绘制食物
+            ctx.fillStyle = 'red';
+            foods.forEach(food => {
+                ctx.beginPath();
+                ctx.arc(food.x + 10, food.y + 10, 8, 0, Math.PI * 2);
+                ctx.fill();
+            });
+
+            // 绘制所有玩家
+            for (let id in players) {
+                const player = players[id];
+                const isCurrentPlayer = id === myId;
+
+                // 更新当前玩家分数
+                if (isCurrentPlayer) {
+                    if (player.score < lastScore) {
+                        canvas.classList.add('flash');
+                        setTimeout(() => canvas.classList.remove('flash'), 500);
+                    }
+                    lastScore = player.score;
+                    scoreElement.textContent = `分数: ${player.score}`;
+                }
+
+                // 绘制蛇身
+                ctx.fillStyle = isCurrentPlayer ? '#4CAF50' : '#999';
+                player.segments.forEach((segment, index) => {
+                    if (index === 0) {
+                        // 蛇头
+                        ctx.beginPath();
+                        ctx.arc(segment.x + 10, segment.y + 10, 10, 0, Math.PI * 2);
+                        ctx.fill();
+                    } else {
+                        // 蛇身
+                        ctx.fillRect(segment.x, segment.y, 20, 20);
+                    }
+                });
+            }
+        });
+    </script>
+</body>
+</html>
